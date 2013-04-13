@@ -17,9 +17,9 @@ public class MainActivity extends SherlockFragmentActivity implements LocationLi
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
+		
 
 		getSupportActionBar().setNavigationMode(ActionBar.NAVIGATION_MODE_TABS);
-
 		getSupportActionBar().addTab(
 				getTab(new TabListener<MapFragment>(this, MapFragment.class
 						.getName(), MapFragment.class), " ¿–“¿"));
