@@ -1,6 +1,9 @@
 package com.example.com.rallat.mapfragment;
 
+import java.util.List;
+
 import android.app.Dialog;
+import android.content.Context;
 import android.content.Intent;
 import android.location.Criteria;
 import android.location.Location;
@@ -8,16 +11,21 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.support.v4.app.FragmentActivity;
+import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.RelativeLayout;
+
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.GoogleMap.CancelableCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 
 public class MapActivityFragment extends FragmentActivity implements LocationListener {
@@ -25,13 +33,43 @@ public class MapActivityFragment extends FragmentActivity implements LocationLis
 	private GoogleMap googleMap;
 	private Location myLocation;
 	private FrameLayout mapPrieview;
-	private ImageView imageView;
 	private Button menuButton;
+	private LocationManager locationManager;
+	private RelativeLayout mainLayout;
+	private FrameLayout frame;
+	private SupportMapFragment fm;
 
 	@Override
 	public void onActivityResult(int requestCode, int resultCode, Intent data) {
 		super.onActivityResult(requestCode, resultCode, data);
 	}
+	
+	public void printDebugLog(String message) {
+		Log.d("debug", message);
+	}
+	
+	 private Location getLastBestLocation() {
+		 	locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+		    Location locationGPS = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+		    Location locationNet = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+		    
+		    long GPSLocationTime = 0;
+		    if (null != locationGPS) { GPSLocationTime = locationGPS.getTime(); }
+
+		    long NetLocationTime = 0;
+
+		    if (null != locationNet) {
+		        NetLocationTime = locationNet.getTime();
+		    }
+
+		    if ( 0 < GPSLocationTime - NetLocationTime ) {
+		        return locationGPS;
+		    }
+		    else{
+		        return locationNet;
+		    }
+
+		}
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -42,9 +80,11 @@ public class MapActivityFragment extends FragmentActivity implements LocationLis
 		
 		mapPrieview = (FrameLayout) findViewById(R.id.map_preview);
 
-		imageView = (ImageView) findViewById(R.id.imageView1);
+		frame = (FrameLayout) findViewById(R.id.list);
 		
 		menuButton = (Button) findViewById(R.id.button1);
+		
+		mainLayout = (RelativeLayout) findViewById(R.id.mainLayout);
 	
 		
         int status = GooglePlayServicesUtil.isGooglePlayServicesAvailable(getBaseContext());
@@ -59,73 +99,128 @@ public class MapActivityFragment extends FragmentActivity implements LocationLis
         }else { // Google Play Services are available
  
             // Getting reference to the SupportMapFragment of activity_main.xml
-            SupportMapFragment fm = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
+            fm = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
  
             // Getting GoogleMap object from the fragment
             googleMap = fm.getMap();
  
             // Enabling MyLocation Layer of Google Map
             googleMap.setMyLocationEnabled(true);
- 
-            // Getting LocationManager object from System Service LOCATION_SERVICE
-            LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
- 
-            // Creating a criteria object to retrieve provider
-            Criteria criteria = new Criteria();
- 
-            // Getting the name of the best provider
-            String provider = locationManager.getBestProvider(criteria, true);
- 
-            // Getting Current Location
-            myLocation = locationManager.getLastKnownLocation(provider);
- 
-            if(myLocation!=null){
-            	//moveCamera(myLocation);
-            }            
-           
-
-    		menuButton.setVisibility(8);
+          
+            //Getting Current Location
+            myLocation = getLastBestLocation();        
+            
+    		menuButton.setVisibility(4);
     		googleMap.getUiSettings().setZoomControlsEnabled(false);
-    		googleMap.getUiSettings().setMyLocationButtonEnabled(false);
-    		
-    		
+    		googleMap.getUiSettings().setMyLocationButtonEnabled(false);            
+            
+            if(myLocation!=null){
+    			LatLng latLng = new LatLng(myLocation.getLatitude(), myLocation.getLongitude());            	
+            	googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 15)); 
+		        int moveValue = mainLayout.getHeight()/2 - mapPrieview.getHeight()/2;		        
+				googleMap.moveCamera(CameraUpdateFactory.scrollBy(0, moveValue));            
+				printDebugLog("start sdvig");
+            }                       
+    		    		
     		mapPrieview.setOnClickListener(new View.OnClickListener() {
     			
     			@Override
     			public void onClick(View v) {
     				mapPrieview.setVisibility(4);
-    				imageView.setVisibility(4);
+    				frame.setVisibility(4);
     				googleMap.getUiSettings().setZoomControlsEnabled(true);
     				googleMap.getUiSettings().setMyLocationButtonEnabled(true);
-    				menuButton.setVisibility(0);
-    				moveCamera(myLocation);
+    				menuButton.setVisibility(0);    		    				
+    				animateMap(myLocation);
     			}
     		});
 
     		menuButton.setOnClickListener(new View.OnClickListener() {
-				
+				boolean mapMoved = true;
 				@Override
-				public void onClick(View v) {
-    				moveCamera(myLocation);
-    				mapPrieview.setVisibility(0);
-    				imageView.setVisibility(0);
+				public void onClick(View v) {					
+
     				googleMap.getUiSettings().setZoomControlsEnabled(false);
     				googleMap.getUiSettings().setMyLocationButtonEnabled(false);
     				menuButton.setVisibility(4);
-    				//googleMap.animateCamera(CameraUpdateFactory.scrollBy(0, 120));
+    				LatLng latLng = new LatLng(myLocation.getLatitude(), myLocation.getLongitude());
+    				fm
+    				googleMap.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.fromLatLngZoom(latLng, 15)), 200,  new CancelableCallback() {
+
+						@Override
+						public void onCancel() {
+							
+						}
+
+						@Override
+						public void onFinish() {
+							mapMoved = true;
+		        	        if (menuButton.getVisibility() == 4){
+		        	        	//raschitivaju na skoljko nado sdvinutj kartu
+		        		        int moveValue = mainLayout.getHeight()/2 - mapPrieview.getHeight()/2;        		               		      
+		        		        
+		        				googleMap.animateCamera(CameraUpdateFactory.scrollBy(0, moveValue), 200, new CancelableCallback() {
+
+		        	                @Override
+		        	                public void onFinish() {    	        	    				
+		        	    				mapPrieview.setVisibility(0);
+		        	    				frame.setVisibility(0);
+		        	                }
+		        	                @Override
+		        	                public void onCancel() {                
+		        	                }
+		        	            });
+		        	        }
+    	    				mapPrieview.setVisibility(0);
+    	    				frame.setVisibility(0);
+						}
+    					
+    				});	    		
 				}
 			});
-            //locationManager.requestLocationUpdates(provider, 20000, 0, this);
         }
 	}
 	
+	 public void animateMap(Location location) {	        
+			LatLng latLng = new LatLng(myLocation.getLatitude(), myLocation.getLongitude());
+			//googleMap.getUiSettings().setScrollGesturesEnabled(false);			
+			googleMap.animateCamera(CameraUpdateFactory.newLatLng(latLng), 200,  new CancelableCallback() {
+
+                @Override
+                public void onFinish() {
+        	        if (menuButton.getVisibility() == 4){
+        	        	//raschitivaju na skoljko nado sdvinutj kartu
+        		        int moveValue = mainLayout.getHeight()/2 - mapPrieview.getHeight()/2;
+        				googleMap.animateCamera(CameraUpdateFactory.scrollBy(0, moveValue), 200, new CancelableCallback() {
+
+        	                @Override
+        	                public void onFinish() {
+
+        	                }
+        	                @Override
+        	                public void onCancel() {                
+        	                }
+        	            });
+        	        }
+                }
+
+                @Override
+                public void onCancel() {                
+                }
+            });
+			        
+	 }
+	
+	
 	@Override
 	 public void onLocationChanged(Location location) {
-	      myLocation = location;	 
+	      myLocation = location;	
+	      
+	      printDebugLog("onLocationChanged location: "+location);
 	        // Zoom in the Google Map
 
 	        
-	        if (menuButton.getVisibility() != 4){
+	        if (menuButton.getVisibility() == 4){
 	    		// Getting latitude of the current location
 		        double latitude = location.getLatitude();
 		 
@@ -138,35 +233,14 @@ public class MapActivityFragment extends FragmentActivity implements LocationLis
 		        // Showing the current location in Google Map
 		        googleMap.moveCamera(CameraUpdateFactory.zoomTo(15));
 		        //googleMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
-	        	googleMap.moveCamera(CameraUpdateFactory.scrollBy(0, 120));
+		        
+		        int moveValue = mainLayout.getHeight()/2 - mapPrieview.getHeight()/2;
+		        printDebugLog("move: "+moveValue);
+		       
+	        	googleMap.moveCamera(CameraUpdateFactory.scrollBy(0, moveValue));
 	        }
 	 
 	    } 
-	
-	
-	 public void moveCamera(Location location) {
-	      
-		// Getting latitude of the current location
-	        double latitude = location.getLatitude();
-	 
-	        // Getting longitude of the current location
-	        double longitude = location.getLongitude();
-	 
-	        // Creating a LatLng object for the current location
-	        LatLng latLng = new LatLng(latitude, longitude);
-	        
-	        // Showing the current location in Google Map
-	        googleMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
-	 
-	        // Zoom in the Google Map
-	        googleMap.moveCamera(CameraUpdateFactory.zoomTo(15));
-	        
-	        if (menuButton.getVisibility() != 4){
-	        	googleMap.animateCamera(CameraUpdateFactory.scrollBy(0, 120));
-	        	//googleMap.moveCamera(CameraUpdateFactory.scrollBy(0, 120));
-	        }
-	 
-	    }
 	 
 	    public void onProviderDisabled(String provider) {
 	        // TODO Auto-generated method stub
